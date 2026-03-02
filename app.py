@@ -4,7 +4,7 @@ import pyqtgraph.opengl as gl
 import pyqtgraph as pg
 import numpy as np
 import sys
-import argon
+import argon_numpy as arnp
 import time
 
 class SimulationWorker(QThread):
@@ -17,15 +17,15 @@ class SimulationWorker(QThread):
         self.iterations = iterations
 
     def run(self):
-        cluster = argon.initialize_cluster(self.num_atoms)
+        cluster = arnp.initialize_cluster(self.num_atoms)
         
         for i in range(self.iterations):
-            argon.translational_move(cluster, self.temp, 0.25)
-            argon.COM(cluster)
+            arnp.translational_move(cluster, self.temp, 0.25)
+            arnp.COM(cluster)
 
             if i % 200 == 0:  # update less frequently for performance
-                coords = np.array(argon.graph(cluster)).T  # shape (N,3)
-                energy = argon.calc_energy(cluster)
+                coords = np.array(arnp.graph_coords(cluster)).T  # shape (N,3)
+                energy = arnp.calc_energy_vec(cluster)
                 self.update_signal.emit(coords, energy)
                 self.msleep(2)  # give GUI breathing room
 
