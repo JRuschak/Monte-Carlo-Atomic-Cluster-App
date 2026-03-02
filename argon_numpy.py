@@ -71,23 +71,26 @@ def single_atom_energy(positions, atom_index, epsilon=121.0, sigma=3.4):
 
     # vectorized distances
     diffs = others - atom_pos  # shape (N-1, 3)
-    r = np.linalg.norm(diffs, axis=1)
+    r2 = np.sum(diffs**2, axis=1)
 
-    sr6 = (sigma / r) ** 6
+    sr6 = sigma**6/(r2**3)
     energy = np.sum(4 * epsilon * (sr6**2 - sr6))
     return energy
 
-'''
+def quench(initial_t):
+    return initial_t * .99 #not sure if this is a good quench
 
+'''
 before = time.time()
 
 test = initialize_cluster(13)
-for i in range(100000):
-    translational_move(test,10,.125)
+steps = 100000
+initial_t = 10
+for i in range(steps):
+    translational_move(test,quench(initial_t, steps, i),.125)
     COM(test)
 
 print(calc_energy_vec(test))
 
 print(time.time()-before)
-
 '''

@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLineEdit, QLabel, QHBoxLayout
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLineEdit, QLabel, QHBoxLayout, QCheckBox
 from PyQt6.QtCore import QThread, pyqtSignal
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
@@ -8,25 +8,29 @@ import argon_numpy as arnp
 import time
 
 class SimulationWorker(QThread):
-    update_signal = pyqtSignal(np.ndarray, float)  # single numpy array for positions
+    update_signal = pyqtSignal(np.ndarray, float, float)  # single numpy array for positions
 
-    def __init__(self, num_atoms, temp, iterations):
+    def __init__(self, num_atoms, temp, iterations, quench):
         super().__init__()
         self.num_atoms = num_atoms
         self.temp = temp
         self.iterations = iterations
+        self.quench = quench
 
     def run(self):
         cluster = arnp.initialize_cluster(self.num_atoms)
-        
+        check = self.iterations/50
         for i in range(self.iterations):
             arnp.translational_move(cluster, self.temp, 0.25)
             arnp.COM(cluster)
+    
 
-            if i % 200 == 0:  # update less frequently for performance
+            if i % check == 0:  # update less frequently for performance
+                if self.quench:
+                    self.temp = arnp.quench(self.temp)
                 coords = np.array(arnp.graph_coords(cluster)).T  # shape (N,3)
                 energy = arnp.calc_energy_vec(cluster)
-                self.update_signal.emit(coords, energy)
+                self.update_signal.emit(coords, energy, self.temp)
                 self.msleep(2)  # give GUI breathing room
 
 class MainWindow(QWidget):
@@ -73,9 +77,14 @@ class MainWindow(QWidget):
         controls_layout.addWidget(self.run_button)
         self.run_button.clicked.connect(self.run_sim)
 
+        self.quench_checkbox = QCheckBox("Enable Quench")
+        controls_layout.addWidget(self.quench_checkbox)
+
         # Energy display
         self.energy_label = QLabel("Energy: 0.0")
         controls_layout.addWidget(self.energy_label)
+        self.temp = QLabel("Temp: 0.0")
+        controls_layout.addWidget(self.temp)
 
     def run_sim(self):
         try:
@@ -85,14 +94,15 @@ class MainWindow(QWidget):
         except ValueError:
             print("Invalid input")
             return
-
-        self.worker = SimulationWorker(num_atoms, temp, steps)
+        quench_enabled = self.quench_checkbox.isChecked()
+        self.worker = SimulationWorker(num_atoms, temp, steps, quench_enabled)
         self.worker.update_signal.connect(self.update_plot)
         self.worker.start()
 
-    def update_plot(self, coords, energy):
+    def update_plot(self, coords, energy, temp):
         self.scatter.setData(pos=coords)
         self.energy_label.setText(f"Energy: {energy:.3f}")
+        self.temp.setText(f"Temp: {temp:.3f}")
 
 
 if __name__ == "__main__":
